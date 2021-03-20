@@ -1,0 +1,86 @@
+# Proyecto de clustering
+### Emmanuel Hernández Sánchez
+
+Se corrió Blastp con el comándo: "blastp -input ABC.faa -subject ABC.faa -outfmt 7 -max_hsps 1 -use_sw_tback -evalue 100 -out Blastp_ABC.xml"
+
+```{r}
+#Se parsean los resultados del archivo con el Blastp de las secuencias ABC.
+result<-read.table("Blastp_ABC.xml")
+#Se crea matriz para almacenar las disimilitudes.
+matriz_bitscore<-matrix(1:10000,nrow = 100)
+names<-unique(sort(result$V1))
+rownames(matriz_bitscore)<-names
+colnames(matriz_bitscore)<-names
+#Se llena la matriz con los bitscores
+for (i in 1:100){
+  for (j in 1:100){
+    matriz_bitscore[names[i],names[j]]<-max(result$V12[
+      (result$V1==names[i])&(result$V2==names[j])])
+  }
+}
+#Como salieron algunos resultados infinitos se les dio valor de 0.
+matriz_bitscore[which(is.infinite(matriz_bitscore))]<-0
+#Se obtuvo el máximo de la matriz.
+max_bit<-max(matriz_bitscore)
+#Se convirtió los bitscore a valoresde disimilitud y se lleno la diagonal con ceros.
+matriz_bitscore<-1-matriz_bitscore/max_bit
+matriz_bitscore[seq(1,10000,101)]<-0
+```
+
+```{r}
+#Se obtuvieron los clusters con cada método y se les sacó los coeficientes.
+library(cluster)
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(dendextend))
+suppressPackageStartupMessages(library(ape))
+csin <- hclust(dist(matriz_bitscore, method = "euclidean"), method = "single")
+cave <- hclust(dist(matriz_bitscore, method = "euclidean"), method = "average")
+ccom <- hclust(dist(matriz_bitscore, method = "euclidean"), method = "complete")
+cwar <- hclust(dist(matriz_bitscore, method = "euclidean"), method = "ward.D2")
+coefs<-coef(csin)
+coefc<-coef(ccom)
+coefw<-coef(cwar)
+coefa<-coef(cave)
+#Gráfica para determinar el número de cluster (4).
+fviz_nbclust(matriz_bitscore, FUN = hcut, method = "wss", k.max = 30, print.summary = TRUE)
+```
+```{r}
+#Se guarda el árbol obtenido por ward, por ser el que tiene un coeficiente más alto.
+tree_h<-as.phylo(cwar)
+write.tree(tree_h, file='ABC_filo.txt')
+```
+## Dendogramas de cada método
+
+```{r}
+plot(cwar, hang = -1, main = "Ward.D")
+rect.hclust(cwar, k=4,  border=2:4)
+cwar4 <- cutree(cwar, k=4)
+```
+
+```{r}
+plot(csin, hang = -1, main = "Single")
+rect.hclust(cwar, k=4,  border=2:4)
+csin4 <- cutree(csin, k=4)
+```
+
+```{r}
+plot(ccom, hang = -1, main = "complete")
+rect.hclust(ccom, k=4,  border=2:4)
+ccom4 <- cutree(ccom, k=4)
+```
+
+```{r}
+plot(cave, hang = -1, main = "average")
+rect.hclust(cave, k=4,  border=2:4)
+cave4 <- cutree(cave, k=4)
+```
+
+```{r}
+#Gráficas para observar los clusters con más detalle.
+fviz_cluster(list(data = matriz_bitscore, cluster = csin4))
+fviz_cluster(list(data = matriz_bitscore, cluster = ccom4))
+fviz_cluster(list(data = matriz_bitscore, cluster = cave4))
+fviz_cluster(list(data = matriz_bitscore, cluster = cwar4))
+```
+
+
